@@ -44,7 +44,9 @@
 
 
 -define(SERVER, ?MODULE).
+%% 合并默认的MFA
 -define(DEFAULT_METHOD, {unsplit_lib, no_action, []}).
+%% 默认策略的遍历所有的keys
 -define(DEFAULT_STRATEGY, all_keys).
 
 -define(DONE, {?MODULE,done}).
@@ -154,9 +156,11 @@ do_stitch_together(NodeA, NodeB) ->
             N <- [NodeA, NodeB]],
     io:fwrite("IslandA = ~p;~nIslandB = ~p~n", [IslandA, IslandB]),
     TabsAndNodes = affected_tables(IslandA, IslandB),
+	%% 得出所有的表名称
     Tabs = [T || {T,_} <- TabsAndNodes],
     io:fwrite("Affected tabs = ~p~n", [Tabs]),
     DefaultMethod = default_method(),
+	%% 获取表，节点，合并方法
     TabMethods = [{T, Ns, get_method(T, DefaultMethod)}
                   || {T,Ns} <- TabsAndNodes],
     io:fwrite("Methods = ~p~n", [TabMethods]),
@@ -176,7 +180,7 @@ do_stitch_together(NodeA, NodeB) ->
                       Other
               end
       end).
-
+%% 显示持有的锁
 show_locks(OtherNode) ->
     Info = [{node(), mnesia_locker:get_held_locks()},
             {OtherNode, rpc:call(OtherNode,
@@ -191,12 +195,15 @@ stitch_tabs(TabMethods, NodeB) ->
 
 
 
-
+%% 进行合并
+%% 每个节点可能存在不同的合并函数
 do_stitch({Tab, Ns, {M, F, XArgs}} = TM, Remote) ->
     io:fwrite("do_stitch(~p, ~p).~n", [TM,Remote]),
     HasCopy = lists:member(Remote, Ns),
     io:fwrite("~p has a copy of ~p? -> ~p~n", [Remote, Tab, HasCopy]),
+	%% 获得表的属性
     Attrs = mnesia:table_info(Tab, attributes),
+	%% 模块，函数，以及附加参数
     S0 = #st{module = M, function = F, extra_args = XArgs,
              table = Tab, attributes = Attrs,
              remote = Remote,
@@ -300,7 +307,7 @@ local_perform_actions(Actions, Tab) ->
       end, Actions).
 
 
-
+%% 计算出受影响的表
 affected_tables(IslandA, IslandB) ->
     Tabs = mnesia:system_info(tables) -- [schema],
     lists:foldl(
@@ -311,6 +318,7 @@ affected_tables(IslandA, IslandB) ->
               io:fwrite("nodes_of(~p) = ~p~n", [T, Nodes]),
               case {intersection(IslandA, Nodes), 
                     intersection(IslandB, Nodes)} of 
+				  %% T 这张表，在islandA和islandB中都有
                   {[_|_], [_|_]} ->
                       [{T, Nodes}|Acc];
                   _ ->
@@ -319,12 +327,13 @@ affected_tables(IslandA, IslandB) ->
       end, [], Tabs).
 
 backend_types() ->
-    try mnesia:system_info(backend_types)
+    try 
+		mnesia:system_info(backend_types)
     catch
-	exit:_ ->
-	    [ram_copies, disc_copies, disc_only_copies]
+		exit:_ ->
+			[ram_copies, disc_copies, disc_only_copies]
     end.
-
+%% 找到集合交集
 intersection(A, B) ->
     A -- (A -- B).
 
